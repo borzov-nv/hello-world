@@ -1,34 +1,33 @@
 #!/bin/bash
+
 file="/proc/bus/input/devices"
 IFS=$'\n'
 
+declare -A device_info
+current_id=""
+
 while read -r line
 do
-case $line in
-    I:*) echo $line | cut -c3- ;;
-    N:*) echo $line | cut -c3- | sed 's/\nN: //' ;;
-    P:*) echo $line | cut -c3- | sed 's/\nP: //' ;;
-    S:*) echo $line | cut -c3- | sed 's/\nS: //' ;;
-    H:*) echo $line | cut -c3- | sed 's/\nH: //' ;;
-esac
-
-#printf "%-15s %-15s %-15s %-15s %-15s\n" "$id" "$name" "$phys" "$sysfs" "$hand"
+    if [[ $line =~ ^I: ]]; then
+        if [[ -n "$current_id" ]]; then
+            output=""
+            output+="${device_info[I]:-N/A} "
+            output+="${device_info[N]:-N/A} "
+            echo "$output"
+        fi
+        current_id=$(echo "$line" | cut -c3-)
+        device_info=() 
+        device_info[I]="$current_id"
+    else
+        case $line in
+            N:*) device_info[N]=$(echo "$line" | cut -c3-) ;;
+        esac
+    fi
 done < "$file"
 
-#while read -r line
-#do
-#case $line in
-#    I:*) id=$(echo $line | cut -c3-) ;;
-#    N:*) name=$(echo $line | cut -c3-) ;;
-#    P:*) phys=$(echo $line | cut -c3-) ;;
-#    S:*) sysfs=$(echo $line | cut -c3-) ;;
-#    H:*) hand=$(echo $line | cut -c3-) ;;
-#esac
-#printf "%-15s %-15s %-15s %-15s %-15s\n" "$id" "$name" "$phys" "$sysfs" "$hand"
-#done < "$file"
-
-
-#for line in "$file"
-#do
-#    printf "%-15s %-15s %-15s %-15s %-15s\n" "$id" "$name" "$phys" "$sysfs" "$hand"
-#done
+if [[ -n "$current_id" ]]; then
+    output=""
+    output+="${device_info[I]:-N/A} "
+    output+="${device_info[N]:-N/A} "
+    echo "$output"
+fi
