@@ -1,0 +1,62 @@
+#!/bin/bash
+
+file="/proc/bus/input/devices"
+LOG_FILE="device_log.txt"
+IFS=$'\n'
+
+declare -A device_info
+declare -A logged_devices # To keep track of devices already in the log
+
+# --- Function to load existing logged devices ---
+load_logged_devices() {
+    if [[ -f "$LOG_FILE" ]]; then
+        while IFS= read -r line; do
+            # Extract the device ID and Name part by removing the timestamp prefix
+            # Assuming timestamp format: YYYY-MM-DD HH:MM:SS I:... N:...
+            # We'll look for the 'I:' part to start the device info
+            device_part=$(echo "$line" | sed -n 's/^[^I]*\(I:.*\)/\1/p')
+            if [[ -n "$device_part" ]]; then
+                logged_devices["$device_part"]=1
+            fi
+        done < "$LOG_FILE"
+    fi
+}
+
+# --- Load existing devices from the log file ---
+load_logged_devices
+
+current_id=""
+
+while read -r line
+do
+    if [[ $line =~ ^I: ]]; then
+        if [[ -n "$current_id" ]]; then
+            # Construct the device identifier string (ID and Name) for logging check
+            device_identifier="I:${device_info[I]:-N/A} N:${device_info[N]:-N/A}"
+
+            # Check if the device is already in our logged_devices array
+            if [[ -z "${logged_devices["$device_identifier"]}" ]]; then
+                TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+                echo "$TIMESTAMP $device_identifier" >> "$LOG_FILE"
+                logged_devices["$device_identifier"]=1 # Mark as logged
+            fi
+        fi
+        current_id=$(echo "$line" | cut -c3-)
+        device_info=()
+        device_info[I]="$current_id"
+    else
+        case $line in
+            N:*) device_info[N]=$(echo "$line" | cut -c3-) ;;
+        esac
+    fi
+done < "$file"
+
+# --- Handle the last device after the loop finishes ---
+if [[ -n "$current_id" ]]; then
+    device_identifier="I:${device_info[I]:-N/A} N:${device_info[N]:-N/A}"
+    if [[ -z "${logged_devices["$device_identifier"]}" ]]; then
+        TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+        echo "$TIMESTAMP $device_identifier" >> "$LOG_FILE"
+        logged_devices["$device_identifier"]=1
+    fi
+fi
